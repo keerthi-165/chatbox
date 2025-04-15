@@ -1,0 +1,95 @@
+import nltk
+import random
+import string
+import json
+import spacy
+from nltk.stem import WordNetLemmatizer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.linear_model import LogisticRegression
+import numpy as np
+
+# Initialize the lemmatizer and spaCy model
+nltk.download('punkt')
+nltk.download('wordnet')
+nlp = spacy.load("en_core_web_sm")
+lemmatizer = WordNetLemmatizer()
+
+# Load intents (make sure you create the intents.json file as mentioned below)
+with open("intents.json") as file:
+    intents = json.load(file)
+
+# Initialize an empty list for words and an empty list for documents
+words = []
+classes = []
+patterns = []
+responses = []
+
+# Loop through each intent to extract patterns, responses, and tags
+for intent in intents["intents"]:
+    for pattern in intent["patterns"]:
+        word_list = nltk.word_tokenize(pattern)
+        words.extend(word_list)
+        patterns.append(pattern)
+        responses.append(intent["responses"])
+        classes.append(intent["tag"])
+
+# Lemmatize the words and remove duplicates
+words = [lemmatizer.lemmatize(w.lower()) for w in words if w not in string.punctuation]
+words = sorted(list(set(words)))
+
+# Sort classes and remove duplicates
+classes = sorted(list(set(classes)))
+
+# Create the training data
+training_sentences = patterns
+training_labels = [classes.index(tag) for tag in classes]
+
+# Initialize the vectorizer
+vectorizer = TfidfVectorizer()
+
+# Fit and transform the training data
+X_train = vectorizer.fit_transform(training_sentences)
+
+# Train the classifier
+classifier = LogisticRegression()
+classifier.fit(X_train, training_labels)
+
+# Function to clean up sentence
+def clean_up_sentence(sentence):
+    sentence_words = nltk.word_tokenize(sentence)
+    sentence_words = [lemmatizer.lemmatize(word.lower()) for word in sentence_words]
+    return sentence_words
+
+# Function to predict the class of the sentence
+def predict_class(sentence):
+    # Clean up the sentence
+    sentence_words = clean_up_sentence(sentence)
+    # Convert sentence to a vector
+    sentence_vector = vectorizer.transform([" ".join(sentence_words)])
+    # Predict the class
+    return classifier.predict(sentence_vector)[0]
+
+# Function to get a response
+def get_response(tag):
+    # Select a random response from the corresponding intent
+    response = random.choice([intent['responses'] for intent in intents['intents'] if intent['tag'] == tag])
+    return random.choice(response)
+
+# Main chatbot function
+def chatbot():
+    print("Chatbot: Hello! Type 'quit' to exit.")
+    while True:
+        # Take user input
+        user_input = input("You: ")
+        if user_input.lower() == 'quit':
+            print("Chatbot: Goodbye!")
+            break
+        # Predict the class of the input and get a response
+        intent_tag = classes[predict_class(user_input)]
+        response = get_response(intent_tag)
+        print(f"Chatbot: {response}")
+
+# Save this script to a Python file
+if name == "main":
+    chatbot()
